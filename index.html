@@ -93,8 +93,8 @@
     </style>
   </head>
   <body>
-    <p class="disclaimer">Bike data from <a href="https://github.com/anton612/bicycledata">here</a> (thanks Anton!), geocoded from Google. ~80 crashes were removed for non accurate geocoding, will be added back once it's manually done. Source is <a href="https://github.com/gelicia/bicycledata/blob/master/viz/index.html">here</a>.<br/>
-    Please don't read too much into the intersection's weighted score. I need to consult with a domain expert on an accurate weighting. Mine is <a href="https://github.com/gelicia/bicycledata/blob/master/viz/index.html#L269">very simple</a>.<br/>
+    <p class="disclaimer">Bike data from <a href="https://github.com/anton612/bicycledata">here</a> (thanks Anton!), geocoded from Google or done manually.<br/>
+    Please don't read too much into the intersection's weighted score. I need to consult with a domain expert on an accurate weighting. Mine is <a href="https://github.com/gelicia/bikeCrashViz/blob/master/index.html#L275">very simple</a>.<br/>
     Questions or problems, contact <a href="mailto:kdurivage@gelicia.com">me</a>.</p>
     <div id="map"></div>
     <div >
@@ -261,7 +261,7 @@ loadData().then(function(){
 
 function loadData(){
   var def = Q.defer();
-  d3.csv("bicycle-data-bad-removed.csv", function(data) {
+  d3.csv("bicycle-data.csv", function(data) {
     nestData = d3.nest().key(function(d){ return d.lat + "," + d.long}).entries(data);
 
     for (var i = 0; i < nestData.length; i++) {
