@@ -202,24 +202,22 @@ loadData().then(function(){
 
     g.attr("transform", "translate(" + -topLeft.x + "," + -topLeft.y + ")");
 
+    //Color is intersection score and size being # of accidents
+    var intersectionSevTotalRange = d3.extent(nestData, function(d){return d.intersectTotal;});
+    var colorRange = d3.scale.linear().domain(intersectionSevTotalRange).range(['#fff', '#ff0000']);
+    var intersectionCrashTotalRange = d3.extent(nestData, function(d){return d.values.length;});
+    var sizeRange = d3.scale.linear().domain(intersectionSevTotalRange).range([5, 80]);
+    var zoomRange = d3.scale.linear().domain([11,18]).range([0.1, 1]);
+    var zoomLevel = map.getZoom();
+
+    console.log(zoomLevel, zoomRange(zoomLevel));
     crashes.attr({
-      fill:"red",
+      fill:function(d){return colorRange(d.intersectTotal);},
       "stroke-width": 1,
       "stroke": "black",
-      opacity: 0.5,
+      opacity: 0.7,
       r: function (d) {  
-        var zoomFactor = map.getZoom();
-        if(zoomFactor >= 16){
-          zoomFactor=1;
-        }
-        else if(zoomFactor <= 13){
-          zoomFactor=0.25;
-        }
-        else {
-          zoomFactor=0.5;
-        }
-
-        return d.intersectTotal*zoomFactor;},
+        return sizeRange(d.values.length) * zoomRange(zoomLevel);},
        cx: function(d){
         var longLat = [d.values[0].long, d.values[0].lat];
         var point = map.latLngToLayerPoint(new L.LatLng(longLat[1], longLat[0]));
@@ -279,7 +277,7 @@ function loadData(){
         }
         else if (nestData[i].values[j].Level == "Fatalities"){
           intersectFatality++;
-          intersectTotal+=5;
+          intersectTotal+=50;
         }
         else if (nestData[i].values[j].Level == "Property Damage Only"){
           intersectPropDamage++;
@@ -291,7 +289,7 @@ function loadData(){
         }
         else if (nestData[i].values[j].Level == "Incap. Injury (A)"){
           intersectIncapInjury++;
-          intersectTotal+=4;
+          intersectTotal+=15;
         }
       }
 
