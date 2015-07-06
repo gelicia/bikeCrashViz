@@ -2,9 +2,9 @@
 <html>
   <head>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no"/>
-     <script src="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.5/d3.min.js" charset="utf-8"></script>
+     <script src="lib/leaflet.js"></script>
      <link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.css" />
+    <script src="lib/d3.min.js" charset="utf-8"></script>
      <script type="text/javascript" src="lib/q.js"></script>
      <script type="text/javascript" src="lib/d3.tip.js"></script>
 
@@ -15,10 +15,26 @@
 
       #index{
         width:960px;
-        height:50px;
         margin-left: auto;
         margin-right: auto;
         margin-bottom: 10px;
+      }
+
+      #index > div > table {
+        display: inline-table;
+        border: 1px black solid;
+        text-align: center;
+        border-collapse: collapse;
+      }
+
+      #index > div > table > tbody > tr > td {
+        border: 1px black solid;
+        text-align: center;
+      }
+
+      .sevColor {
+        height: 20px;
+        width: 30px
       }
 
       #map {
@@ -29,7 +45,6 @@
       }
 
       svg {
-        display: block;
         position: relative;
         margin: auto;
       }
@@ -106,7 +121,41 @@
     <p class="disclaimer">Bike data from <a href="https://github.com/anton612/bicycledata">here</a> (thanks Anton!), geocoded from Google or done manually.<br/>
     Please don't read too much into the intersection's weighted score. I need to consult with a domain expert on an accurate weighting. Mine is <a href="https://github.com/gelicia/bikeCrashViz/blob/master/index.html#L275">very simple</a>.<br/>
     Questions or problems, contact <a href="mailto:kdurivage@gelicia.com">me</a>.</p>
-    <div id="index"></div>
+    <div id="index">
+      <div>
+        <table>
+          <tr>
+            <td colspan="3"><b>Number of Crashes</b></td>
+          </tr>
+          <tr>
+            <td><svg id="sizeCircMin"></svg></td>
+            <td><svg id="sizeCircMid"></svg></td>
+            <td><svg id="sizeCircMax"></svg></td>
+          </tr>
+          <tr>
+            <td><div id="sizeTextMin"></div></td>
+            <td><div id="sizeTextMid"></div></td>
+            <td><div id="sizeTextMax"></div></td>
+          </tr>
+        </table>
+
+        <table>
+          <tr>
+            <td colspan="3"><b>Severity Score</b></td>
+          </tr>
+          <tr>
+            <td><div id="sevRectMin" class="sevColor"></svg></td>
+            <td><div id="sevRectMid" class="sevColor"></svg></td>
+            <td><div id="sevRectMax" class="sevColor"></svg></td>
+          </tr>
+          <tr>
+            <td><div id="sevTextMin"></div></td>
+            <td><div id="sevTextMid"></div></td>
+            <td><div id="sevTextMax"></div></td>
+          </tr>
+        </table>
+      </div>
+    </div>
     <div id="map"></div>
     <div >
       <table id="crashData">
@@ -133,12 +182,9 @@ L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=p
 var svg = d3.select(map.getPanes().overlayPane).append("svg");
 var g = svg.append("g").attr("class", "leaflet-zoom-hide");
 
-var indexSvg = d3.select("#index").append("svg").classed("indexSvg", true);
-
 var nestData;
 
 loadData().then(function(){
-    
     var tip = d3.tip().attr('class', 'd3-tip').html(function(d) { 
       var intersectString = "Intersection: <b>" + d.values[0]["Primary Road"] + " and " + d.values[0]["Intersecting Road"] + "</b>";
       var accidentsHeader = "Accidents With..."
@@ -212,7 +258,9 @@ loadData().then(function(){
     var colorRange = d3.scale.linear().domain(intersectionSevTotalRange).range(['#fff', '#ff0000']);
 
     var intersectionCrashTotalRange = d3.extent(nestData, function(d){return d.values.length;});
-    var sizeRange = d3.scale.linear().domain(intersectionCrashTotalRange).range([5, 30]);
+    var sizeRange = d3.scale.linear().range(intersectionCrashTotalRange).domain([0, 25]);
+    //we need it to be 0-whatever, but don't want the smallest circles to be 0 pixels. This is the size of what we want the smallest circles to be
+    var sizeRangeOffset = 2;
 
     var indexRange = d3.range(0,1.5,0.5);
 
@@ -225,7 +273,7 @@ loadData().then(function(){
       "stroke": "black",
       opacity: 0.7,
       r: function (d) {  
-        return sizeRange(d.values.length) * zoomRange(zoomLevel);},
+        return sizeRangeOffset + sizeRange(d.values.length) * zoomRange(zoomLevel);},
        cx: function(d){
         var longLat = [d.values[0].long, d.values[0].lat];
         var point = map.latLngToLayerPoint(new L.LatLng(longLat[1], longLat[0]));
@@ -238,23 +286,67 @@ loadData().then(function(){
       }
     }).moveToFront();
 
-    indexSvg.selectAll("circle").remove();
-    indexSvg.selectAll("rect").remove();
+    //build the size index. done in a table for easier spacing/organization, unfortunately it means we need to do this in a loop
+    //not a selection
+    for (var i = 0; i < indexRange.length; i++) {
+      var sizeCircSvg = d3.select("svg#sizeCirc" + (i == 0 ? "Min" : i == 1 ? "Mid" : "Max"));
+      var sizeText = d3.select("div#sizeText" + (i == 0 ? "Min" : i == 1 ? "Mid" : "Max"));
+      var sevRectDiv = d3.select("div#sevRect" + (i == 0 ? "Min" : i == 1 ? "Mid" : "Max"));
+      var sevText = d3.select("div#sevText" + (i == 0 ? "Min" : i == 1 ? "Mid" : "Max"));
 
-    var indexPadding = 5;
-    var sizeIdx = indexSvg.append("g").attr("id", "sizeIdx");
+      var crashTotalRange = d3.scale.linear().range(intersectionCrashTotalRange);
+      var sevTotalRange = d3.scale.linear().range(intersectionSevTotalRange
+        );
+
+      var radius = sizeRangeOffset + sizeRange(intersectionCrashTotalRange[1]* indexRange[i]) * zoomRange(zoomLevel);
+      sizeCircSvg.attr({
+        width: 2 * (radius + 1),
+        height: 2 * (radius + 1)
+      });
+
+      sizeCircSvg.selectAll("circle").remove();
+
+      sizeCircSvg.append("circle").attr({
+        fill: "#fff",
+        "stroke-width" : 1,
+        "stroke": "black",
+        r: radius,
+        cx: radius + 1,
+        cy: radius + 1
+      });
+
+      sizeText.text(crashTotalRange(indexRange[i]));
+
+      sevRectDiv.attr("style", "background-color:" + colorRange( intersectionSevTotalRange[1] * indexRange[i]));
+
+      /*sizeCircSvg.append("circle").attr({
+        fill: "#fff",
+        "stroke-width" : 1,
+        "stroke": "black",
+        r: radius,
+        cx: radius + 1,
+        cy: radius + 1
+      });*/
+
+      sevText.text(sevTotalRange(indexRange[i]));
+    }
+
+    //sizeSvg.selectAll("circle").remove();
+    //colorSvg.selectAll("rect").remove();
+
+    //var indexPadding = 5;
 
     //size circles
-    sizeIdx.selectAll("circle").data(indexRange).enter().append("circle")
+  /*  var sizeCircles = sizeIdx.selectAll("circle").data(indexRange).enter().append("circle")
     .attr({
       fill: "#fff",
       "stroke-width" : 1,
       "stroke": "black",
-      r: function(d){ return sizeRange(intersectionCrashTotalRange[1]*d) * zoomRange(zoomLevel);},
+      r: function(d){ return (sizeRangeOffset + sizeRange(intersectionCrashTotalRange[1]*d)) * zoomRange(zoomLevel);},
       cx: function(d,idx){
         var itrX = 0;
         for (var i = 0; i <= idx; i++) {
-          var thisRad = sizeRange(intersectionCrashTotalRange[1]*indexRange[i]) * zoomRange(zoomLevel);
+          var thisRad = (sizeRangeOffset + sizeRange(intersectionCrashTotalRange[1]*indexRange[i])) * zoomRange(zoomLevel);
           if (i < idx) { thisRad = thisRad * 2;}
           itrX += thisRad + indexPadding;
         }
@@ -262,12 +354,32 @@ loadData().then(function(){
       cy: (sizeRange(intersectionCrashTotalRange[1]) * zoomRange(zoomLevel)) + indexPadding
     });
 
+     var sizeText = sizeIdx.selectAll("text").data(indexRange).enter().append("text")
+    .attr({
+      x: 5,
+      y: 2 * (indexPadding + sizeRangeOffset + sizeRange(intersectionCrashTotalRange[1]) * zoomRange(zoomLevel))
+    }).text(function(d){return sizeRange(intersectionCrashTotalRange[1] * d); });
 
-    var colorMargin = d3.select("g#sizeIdx")[0][0].getBBox().width + 20;
-    var colorIdx = indexSvg.append("g").attr("id", "colorIdx").attr("transform", "translate(" + colorMargin + ", 0)");
+    // x spacing - use text or circle, whichever is wider
+    for (var i = 0; i < indexRange.length; i++) {
+      if(sizeCircles[0][i].getBBox().width >  sizeText[0][i].getBBox().width){
+        sizeText[0][i].attr(y)
+      }
+      //console.log(sizeCircles[0][i].getBBox().width,;
+    }
+
+
+    var circleSVGSize = indexPadding;
+    for (var i = 0; i < indexRange.length; i++) {
+      var thisRad = ((sizeRangeOffset + sizeRange(intersectionCrashTotalRange[1]*indexRange[i])) * zoomRange(zoomLevel)) * 2;
+      circleSVGSize += thisRad + indexPadding;
+    };
+
+    sizeSvg.attr("width", circleSVGSize);
+
+    var colorMargin = circleSVGSize;
+    var colorIdx = colorSvg.append("g").attr("id", "colorIdx");
     var rectIdxSize = {width: 7, height: 15};
-
-    console.log(colorMargin);
 
     //color rects
     colorIdx.selectAll("rect").data(indexRange).enter().append("rect")
@@ -280,7 +392,7 @@ loadData().then(function(){
       fill: function(d, idx){return colorRange(intersectionCrashTotalRange[1]*indexRange[idx]);},
       "stroke-width" : 1,
       "stroke": "black"
-    });
+    });*/
 
 
   }
