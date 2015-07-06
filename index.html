@@ -13,6 +13,14 @@
         text-align: center;
       }
 
+      #index{
+        width:960px;
+        height:50px;
+        margin-left: auto;
+        margin-right: auto;
+        margin-bottom: 10px;
+      }
+
       #map {
         width: 960px;
         height: 500px;
@@ -21,7 +29,9 @@
       }
 
       svg {
+        display: block;
         position: relative;
+        margin: auto;
       }
 
       #crashData{
@@ -96,6 +106,7 @@
     <p class="disclaimer">Bike data from <a href="https://github.com/anton612/bicycledata">here</a> (thanks Anton!), geocoded from Google or done manually.<br/>
     Please don't read too much into the intersection's weighted score. I need to consult with a domain expert on an accurate weighting. Mine is <a href="https://github.com/gelicia/bikeCrashViz/blob/master/index.html#L275">very simple</a>.<br/>
     Questions or problems, contact <a href="mailto:kdurivage@gelicia.com">me</a>.</p>
+    <div id="index"></div>
     <div id="map"></div>
     <div >
       <table id="crashData">
@@ -109,12 +120,6 @@
       });
     };
 
-      // Use Leaflet to implement a D3 geometric transformation.
-  function projectPoint(x, y) {
-    var point = map.latLngToLayerPoint(new L.LatLng(y, x));
-    this.stream.point(point.x, point.y);
-  }
-
 var map = L.map('map').setView([44.96, -93.27], 12);
 
 L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoiZ2VsaWNpYSIsImEiOiJRLUZOV2Z3In0.XYdXJ73QuT8Frxsn1BJ5MA', {
@@ -126,11 +131,11 @@ L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=p
 }).addTo(map);
 
 var svg = d3.select(map.getPanes().overlayPane).append("svg");
-
 var g = svg.append("g").attr("class", "leaflet-zoom-hide");
-var nestData;
 
-var transform = d3.geo.transform({point: projectPoint});
+var indexSvg = d3.select("#index").append("svg").classed("indexSvg", true);
+
+var nestData;
 
 loadData().then(function(){
     
@@ -205,12 +210,15 @@ loadData().then(function(){
     //Color is intersection score and size being # of accidents
     var intersectionSevTotalRange = d3.extent(nestData, function(d){return d.intersectTotal;});
     var colorRange = d3.scale.linear().domain(intersectionSevTotalRange).range(['#fff', '#ff0000']);
+
     var intersectionCrashTotalRange = d3.extent(nestData, function(d){return d.values.length;});
-    var sizeRange = d3.scale.linear().domain(intersectionSevTotalRange).range([5, 80]);
+    var sizeRange = d3.scale.linear().domain(intersectionCrashTotalRange).range([5, 30]);
+
+    var indexRange = d3.range(0,1.5,0.5);
+
     var zoomRange = d3.scale.linear().domain([11,18]).range([0.1, 1]);
     var zoomLevel = map.getZoom();
 
-    console.log(zoomLevel, zoomRange(zoomLevel));
     crashes.attr({
       fill:function(d){return colorRange(d.intersectTotal);},
       "stroke-width": 1,
@@ -229,6 +237,52 @@ loadData().then(function(){
         return point.y;
       }
     }).moveToFront();
+
+    indexSvg.selectAll("circle").remove();
+    indexSvg.selectAll("rect").remove();
+
+    var indexPadding = 5;
+    var sizeIdx = indexSvg.append("g").attr("id", "sizeIdx");
+
+    //size circles
+    sizeIdx.selectAll("circle").data(indexRange).enter().append("circle")
+    .attr({
+      fill: "#fff",
+      "stroke-width" : 1,
+      "stroke": "black",
+      r: function(d){ return sizeRange(intersectionCrashTotalRange[1]*d) * zoomRange(zoomLevel);},
+      cx: function(d,idx){
+        var itrX = 0;
+        for (var i = 0; i <= idx; i++) {
+          var thisRad = sizeRange(intersectionCrashTotalRange[1]*indexRange[i]) * zoomRange(zoomLevel);
+          if (i < idx) { thisRad = thisRad * 2;}
+          itrX += thisRad + indexPadding;
+        }
+        return itrX; },
+      cy: (sizeRange(intersectionCrashTotalRange[1]) * zoomRange(zoomLevel)) + indexPadding
+    });
+
+
+    var colorMargin = d3.select("g#sizeIdx")[0][0].getBBox().width + 20;
+    var colorIdx = indexSvg.append("g").attr("id", "colorIdx").attr("transform", "translate(" + colorMargin + ", 0)");
+    var rectIdxSize = {width: 7, height: 15};
+
+    console.log(colorMargin);
+
+    //color rects
+    colorIdx.selectAll("rect").data(indexRange).enter().append("rect")
+    .attr({
+      width : rectIdxSize.width,
+      height: rectIdxSize.height,
+      x: function(d,idx){
+        return (rectIdxSize.width * idx) + (indexPadding * idx);},
+      y: indexPadding,
+      fill: function(d, idx){return colorRange(intersectionCrashTotalRange[1]*indexRange[idx]);},
+      "stroke-width" : 1,
+      "stroke": "black"
+    });
+
+
   }
 
   function displayData(d){
