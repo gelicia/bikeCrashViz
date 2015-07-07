@@ -45,6 +45,7 @@
       }
 
       svg {
+        display: block;
         position: relative;
         margin: auto;
       }
@@ -258,11 +259,9 @@ loadData().then(function(){
     var colorRange = d3.scale.linear().domain(intersectionSevTotalRange).range(['#fff', '#ff0000']);
 
     var intersectionCrashTotalRange = d3.extent(nestData, function(d){return d.values.length;});
-    var sizeRange = d3.scale.linear().range(intersectionCrashTotalRange).domain([0, 25]);
-    //we need it to be 0-whatever, but don't want the smallest circles to be 0 pixels. This is the size of what we want the smallest circles to be
-    var sizeRangeOffset = 2;
-
-    var indexRange = d3.range(0,1.5,0.5);
+    //map the number of crashes between a value 3px and 30px (max)
+    //these will be further influenced by the zoom
+    var sizeRange = d3.scale.linear().domain(intersectionCrashTotalRange).range([5, 30]);
 
     var zoomRange = d3.scale.linear().domain([11,18]).range([0.1, 1]);
     var zoomLevel = map.getZoom();
@@ -273,8 +272,9 @@ loadData().then(function(){
       "stroke": "black",
       opacity: 0.7,
       r: function (d) {  
-        return sizeRangeOffset + sizeRange(d.values.length) * zoomRange(zoomLevel);},
-       cx: function(d){
+        return Math.ceil(sizeRange(d.values.length) * zoomRange(zoomLevel));
+      },
+      cx: function(d){
         var longLat = [d.values[0].long, d.values[0].lat];
         var point = map.latLngToLayerPoint(new L.LatLng(longLat[1], longLat[0]));
         return point.x;
@@ -288,17 +288,18 @@ loadData().then(function(){
 
     //build the size index. done in a table for easier spacing/organization, unfortunately it means we need to do this in a loop
     //not a selection
+    var indexRange = d3.range(0,1.5,0.5);
     for (var i = 0; i < indexRange.length; i++) {
       var sizeCircSvg = d3.select("svg#sizeCirc" + (i == 0 ? "Min" : i == 1 ? "Mid" : "Max"));
       var sizeText = d3.select("div#sizeText" + (i == 0 ? "Min" : i == 1 ? "Mid" : "Max"));
       var sevRectDiv = d3.select("div#sevRect" + (i == 0 ? "Min" : i == 1 ? "Mid" : "Max"));
       var sevText = d3.select("div#sevText" + (i == 0 ? "Min" : i == 1 ? "Mid" : "Max"));
 
-      var crashTotalRange = d3.scale.linear().range(intersectionCrashTotalRange);
-      var sevTotalRange = d3.scale.linear().range(intersectionSevTotalRange
-        );
+      //I really wanted to think of a better way to do this but I couldn't :'( 
+      var sizeNum = (indexRange[i] === 0 || indexRange[i] === 1 ? intersectionCrashTotalRange[indexRange[i]] : d3.mean(intersectionCrashTotalRange));
 
-      var radius = sizeRangeOffset + sizeRange(intersectionCrashTotalRange[1]* indexRange[i]) * zoomRange(zoomLevel);
+      var radius = Math.ceil(sizeRange(sizeNum) * zoomRange(zoomLevel));
+
       sizeCircSvg.attr({
         width: 2 * (radius + 1),
         height: 2 * (radius + 1)
@@ -315,86 +316,14 @@ loadData().then(function(){
         cy: radius + 1
       });
 
-      sizeText.text(crashTotalRange(indexRange[i]));
+      sizeText.text(sizeNum);
 
-      sevRectDiv.attr("style", "background-color:" + colorRange( intersectionSevTotalRange[1] * indexRange[i]));
+      var colorNum = (indexRange[i] === 0 || indexRange[i] === 1 ? intersectionSevTotalRange[indexRange[i]] : d3.mean(intersectionSevTotalRange));
 
-      /*sizeCircSvg.append("circle").attr({
-        fill: "#fff",
-        "stroke-width" : 1,
-        "stroke": "black",
-        r: radius,
-        cx: radius + 1,
-        cy: radius + 1
-      });*/
+      sevRectDiv.attr("style", "background-color:" + colorRange(colorNum));
 
-      sevText.text(sevTotalRange(indexRange[i]));
+      sevText.text(colorNum);
     }
-
-    //sizeSvg.selectAll("circle").remove();
-    //colorSvg.selectAll("rect").remove();
-
-    //var indexPadding = 5;
-
-    //size circles
-  /*  var sizeCircles = sizeIdx.selectAll("circle").data(indexRange).enter().append("circle")
-    .attr({
-      fill: "#fff",
-      "stroke-width" : 1,
-      "stroke": "black",
-      r: function(d){ return (sizeRangeOffset + sizeRange(intersectionCrashTotalRange[1]*d)) * zoomRange(zoomLevel);},
-      cx: function(d,idx){
-        var itrX = 0;
-        for (var i = 0; i <= idx; i++) {
-          var thisRad = (sizeRangeOffset + sizeRange(intersectionCrashTotalRange[1]*indexRange[i])) * zoomRange(zoomLevel);
-          if (i < idx) { thisRad = thisRad * 2;}
-          itrX += thisRad + indexPadding;
-        }
-        return itrX; },
-      cy: (sizeRange(intersectionCrashTotalRange[1]) * zoomRange(zoomLevel)) + indexPadding
-    });
-
-     var sizeText = sizeIdx.selectAll("text").data(indexRange).enter().append("text")
-    .attr({
-      x: 5,
-      y: 2 * (indexPadding + sizeRangeOffset + sizeRange(intersectionCrashTotalRange[1]) * zoomRange(zoomLevel))
-    }).text(function(d){return sizeRange(intersectionCrashTotalRange[1] * d); });
-
-    // x spacing - use text or circle, whichever is wider
-    for (var i = 0; i < indexRange.length; i++) {
-      if(sizeCircles[0][i].getBBox().width >  sizeText[0][i].getBBox().width){
-        sizeText[0][i].attr(y)
-      }
-      //console.log(sizeCircles[0][i].getBBox().width,;
-    }
-
-
-    var circleSVGSize = indexPadding;
-    for (var i = 0; i < indexRange.length; i++) {
-      var thisRad = ((sizeRangeOffset + sizeRange(intersectionCrashTotalRange[1]*indexRange[i])) * zoomRange(zoomLevel)) * 2;
-      circleSVGSize += thisRad + indexPadding;
-    };
-
-    sizeSvg.attr("width", circleSVGSize);
-
-    var colorMargin = circleSVGSize;
-    var colorIdx = colorSvg.append("g").attr("id", "colorIdx");
-    var rectIdxSize = {width: 7, height: 15};
-
-    //color rects
-    colorIdx.selectAll("rect").data(indexRange).enter().append("rect")
-    .attr({
-      width : rectIdxSize.width,
-      height: rectIdxSize.height,
-      x: function(d,idx){
-        return (rectIdxSize.width * idx) + (indexPadding * idx);},
-      y: indexPadding,
-      fill: function(d, idx){return colorRange(intersectionCrashTotalRange[1]*indexRange[idx]);},
-      "stroke-width" : 1,
-      "stroke": "black"
-    });*/
-
-
   }
 
   function displayData(d){
