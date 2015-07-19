@@ -348,6 +348,9 @@ loadData().then(function(){
     });
 
     rows.append("td").text(function(d){return d["Level"]});
+
+    rows.append("td").text(function(d){return d["lat"]});
+    rows.append("td").text(function(d){return d["long"]});
   }
 
 });
