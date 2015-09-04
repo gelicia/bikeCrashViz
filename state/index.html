@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no"/>
+     <script src="../lib/leaflet.js"></script>
+     <link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.css" />
+    <script src="../lib/d3.min.js" charset="utf-8"></script>
+     <script type="text/javascript" src="../lib/q.js"></script>
+     <script type="text/javascript" src="../lib/d3.tip.js"></script>
+
+    <style type="text/css">
+      p.disclaimer{
+        text-align: center;
+      }
+
+      #index{
+        width:960px;
+        margin-left: auto;
+        margin-right: auto;
+        margin-bottom: 10px;
+      }
+
+      #index > div > table {
+        display: inline-table;
+        border: 1px black solid;
+        text-align: center;
+        border-collapse: collapse;
+      }
+
+      #index > div > table > tbody > tr > td {
+        border: 1px black solid;
+        text-align: center;
+      }
+
+      .sevColor {
+        height: 20px;
+        width: 30px
+      }
+
+      #map {
+        width: 1000px;
+        height: 900px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      svg {
+        display: block;
+        position: relative;
+        margin: auto;
+      }
+
+      #crashData{
+        border: 1px solid black;
+        border-collapse: collapse;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      #crashData td {
+        border: 1px solid black;
+        padding: 3px;
+      }
+
+      .d3-tip {
+        line-height: 1;
+        padding: 12px;
+        background: rgba(0, 0, 0, 0.8);
+        color: #fff;
+        border-radius: 2px;
+        pointer-events: none;
+      }
+
+      /* Creates a small triangle extender for the tooltip */
+      .d3-tip:after {
+        box-sizing: border-box;
+        display: inline;
+        font-size: 10px;
+        width: 100%;
+        line-height: 1;
+        color: rgba(0, 0, 0, 0.8);
+        position: absolute;
+        pointer-events: none;
+      }
+
+      /* Northward tooltips */
+      .d3-tip.n:after {
+        content: "\25BC";
+        margin: -1px 0 0 0;
+        top: 100%;
+        left: 0;
+        text-align: center;
+      }
+
+      /* Eastward tooltips */
+      .d3-tip.e:after {
+        content: "\25C0";
+        margin: -4px 0 0 0;
+        top: 50%;
+        left: -8px;
+      }
+
+      /* Southward tooltips */
+      .d3-tip.s:after {
+        content: "\25B2";
+        margin: 0 0 1px 0;
+        top: -8px;
+        left: 0;
+        text-align: center;
+      }
+
+      /* Westward tooltips */
+      .d3-tip.w:after {
+        content: "\25B6";
+        margin: -4px 0 0 -1px;
+        top: 50%;
+        left: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <p class="disclaimer">Bike data from <a href="https://github.com/anton612/bicycledata">here</a> (thanks Anton!)<br/></p>
+    <div id="index">
+      <!--<div>
+        <table>
+          <tr>
+            <td colspan="3"><b>Number of Crashes</b></td>
+          </tr>
+          <tr>
+            <td><svg id="sizeCircMin"></svg></td>
+            <td><svg id="sizeCircMid"></svg></td>
+            <td><svg id="sizeCircMax"></svg></td>
+          </tr>
+          <tr>
+            <td><div id="sizeTextMin"></div></td>
+            <td><div id="sizeTextMid"></div></td>
+            <td><div id="sizeTextMax"></div></td>
+          </tr>
+        </table>
+
+        <table>
+          <tr>
+            <td colspan="3"><b>Severity Score</b></td>
+          </tr>
+          <tr>
+            <td><div id="sevRectMin" class="sevColor"></svg></td>
+            <td><div id="sevRectMid" class="sevColor"></svg></td>
+            <td><div id="sevRectMax" class="sevColor"></svg></td>
+          </tr>
+          <tr>
+            <td><div id="sevTextMin"></div></td>
+            <td><div id="sevTextMid"></div></td>
+            <td><div id="sevTextMax"></div></td>
+          </tr>
+        </table>
+      </div>-->
+    </div>
+    <div id="map"></div>
+    <div >
+      <table id="crashData">
+      </table>
+    </div>
+    <script type="text/javascript">
+
+    d3.selection.prototype.moveToFront = function() {
+      return this.each(function(){
+        this.parentNode.appendChild(this);
+      });
+    };
+
+var map = L.map('map').setView([44.96, -93.27], 12);
+
+L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoiZ2VsaWNpYSIsImEiOiJRLUZOV2Z3In0.XYdXJ73QuT8Frxsn1BJ5MA', {
+    attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>',
+    maxZoom: 18,
+    minZoom: 6,
+    id: 'gelicia.mifl322k',
+    accessToken: 'pk.eyJ1IjoiZ2VsaWNpYSIsImEiOiJRLUZOV2Z3In0.XYdXJ73QuT8Frxsn1BJ5MA'
+}).addTo(map);
+
+var svg = d3.select(map.getPanes().overlayPane).append("svg");
+var g = svg.append("g").attr("class", "leaflet-zoom-hide");
+
+var nestData;
+
+loadData().then(function(){
+    var tip = d3.tip().attr('class', 'd3-tip').html(function(d) { 
+      var intersectString = "<b>" + d.values[0].SYSTEM + " " + d.values[0].ROUTE + "</b>";
+      var accidentsHeader = "Accidents With..."
+      var  otherInjuryString = "Other Injury: <b>" + d.intersectOtherInjury + "</b>";
+      var  seriousInjuryString = "Serious Injury: <b>" + d.intersectSeriousInjury + "</b>";
+      var  fatalityString = "Fatality: <b>" + d.intersectKilled + "</b>";
+      var  totalScoreString = "Weighted Total Score: <b>" + d.intersectTotal + "</b>";
+      var  numAccidentsString = "Number of Accidents: <b>" + d.values.length + "</b>";
+
+      return intersectString + "<br/>" + accidentsHeader + "<br/>" + otherInjuryString + "<br/>" + seriousInjuryString + "<br/>" 
+         + fatalityString + "<br/>" + totalScoreString + "<br/>" + numAccidentsString; 
+    });
+    g.call(tip);
+
+  var crashes = g.selectAll("circle").data(nestData).enter().append("circle")
+  .on('mouseover', tip.show)
+  .on('mouseout', tip.hide)
+  .on('click', function(d){
+    displayData(d);
+  });
+
+  map.on("viewreset", function(){
+    reset();
+  });
+
+  reset();
+
+  function reset() {
+    var top = 0;
+    var bottom = 0;
+    var left = 0;
+    var right = 0;
+
+    for (var i = 0; i < nestData.length; i++) {
+      if (i==0){
+        top = nestData[i].values[0].lat;
+        bottom = nestData[i].values[0].lat;
+        left = nestData[i].values[0].long;
+        right = nestData[i].values[0].long;
+      }
+      else {
+        if (nestData[i].values[0].lat > top){
+          top = nestData[i].values[0].lat;
+        }
+        if (nestData[i].values[0].lat < bottom){
+          bottom = nestData[i].values[0].lat;
+        }
+        if (nestData[i].values[0].long > left){
+          left = nestData[i].values[0].long;
+        }
+        if (nestData[i].values[0].long < right){
+          right = nestData[i].values[0].long;
+        } 
+      }
+    }
+
+    var topLeft = map.latLngToLayerPoint(new L.LatLng(top, left)); 
+    topLeft.x = topLeft.x - 5;
+    topLeft.y = topLeft.y - 5;
+
+    var bottomRight = map.latLngToLayerPoint(new L.LatLng(bottom, right)); 
+
+    svg.attr("width", bottomRight.x - topLeft.x + 10)
+    .attr("height", bottomRight.y - topLeft.y + 10)
+    .style("left", topLeft.x + "px")
+    .style("top", topLeft.y + "px");
+
+    g.attr("transform", "translate(" + -topLeft.x + "," + -topLeft.y + ")");
+
+    //Color is intersection score and size being # of accidents
+    var intersectionSevTotalRange = d3.extent(nestData, function(d){return d.intersectTotal;});
+    var colorRange = d3.scale.linear().domain(intersectionSevTotalRange).range(['#fff', '#ff0000']);
+
+    var intersectionCrashTotalRange = d3.extent(nestData, function(d){return d.values.length;});
+    //map the number of crashes between a value 3px and 30px (max)
+    //these will be further influenced by the zoom
+    var sizeRange = d3.scale.linear().domain(intersectionCrashTotalRange).range([5, 30]);
+
+    var zoomRange = d3.scale.linear().domain([11,18]).range([0.1, 1]);
+    var zoomLevel = map.getZoom();
+
+    crashes.attr({
+      fill:function(d){return colorRange(d.intersectTotal);},
+      "stroke-width": 1,
+      "stroke": "black",
+      opacity: 0.7,
+      r: function (d) {  
+        return 3;//Math.ceil(sizeRange(d.values.length) * zoomRange(zoomLevel));
+      },
+      cx: function(d){
+        var longLat = [d.values[0].long, d.values[0].lat];
+        var point = map.latLngToLayerPoint(new L.LatLng(longLat[1], longLat[0]));
+        return point.x;
+      },
+      cy: function(d){
+        var longLat = [d.values[0].long, d.values[0].lat];
+        var point = map.latLngToLayerPoint(new L.LatLng(longLat[1], longLat[0]));
+        return point.y;
+      }
+    }).moveToFront();
+
+    //build the size index. done in a table for easier spacing/organization, unfortunately it means we need to do this in a loop
+    //not a selection
+    var indexRange = d3.range(0,1.5,0.5);
+    for (var i = 0; i < indexRange.length; i++) {
+      var sizeCircSvg = d3.select("svg#sizeCirc" + (i == 0 ? "Min" : i == 1 ? "Mid" : "Max"));
+      var sizeText = d3.select("div#sizeText" + (i == 0 ? "Min" : i == 1 ? "Mid" : "Max"));
+      var sevRectDiv = d3.select("div#sevRect" + (i == 0 ? "Min" : i == 1 ? "Mid" : "Max"));
+      var sevText = d3.select("div#sevText" + (i == 0 ? "Min" : i == 1 ? "Mid" : "Max"));
+
+      //I really wanted to think of a better way to do this but I couldn't :'( 
+      var sizeNum = (indexRange[i] === 0 || indexRange[i] === 1 ? intersectionCrashTotalRange[indexRange[i]] : d3.mean(intersectionCrashTotalRange));
+
+      var radius = 3;//Math.ceil(sizeRange(sizeNum) * zoomRange(zoomLevel));
+
+      sizeCircSvg.attr({
+        width: 2 * (radius + 1),
+        height: 2 * (radius + 1)
+      });
+
+      sizeCircSvg.selectAll("circle").remove();
+
+      sizeCircSvg.append("circle").attr({
+        fill: "#fff",
+        "stroke-width" : 1,
+        "stroke": "black",
+        r: radius,
+        cx: radius + 1,
+        cy: radius + 1
+      });
+
+      sizeText.text(sizeNum);
+
+      var colorNum = (indexRange[i] === 0 || indexRange[i] === 1 ? intersectionSevTotalRange[indexRange[i]] : d3.mean(intersectionSevTotalRange));
+
+      sevRectDiv.attr("style", "background-color:" + colorRange(colorNum));
+
+      sevText.text(colorNum);
+    }
+  }
+
+  function displayData(d){
+    var dataTable = d3.select("#crashData");
+
+    dataTable.selectAll("tr").remove();
+
+    var header = dataTable.append("tr").style("font-weight", "bold").style("text-align", "center");
+    header.append("td").text("Crash ID");
+    header.append("td").text("System");
+    header.append("td").text("Route");
+    header.append("td").text("Date");
+    header.append("td").text("Crash Severity");
+    header.append("td").text("Fatalities");
+    header.append("td").text("Serious Injuries");
+    header.append("td").text("Other Injuries");
+    header.append("td").text("Latitude");
+    header.append("td").text("Longitude");
+
+    var rows = dataTable.selectAll("tr>th").data(d.values).enter().append("tr").style("background-color", function(d,i){return i%2 == 1 ? "#dfdfdf" : "#fff"});
+
+    rows.append("td").text(function(d){return d.CRASH_ID});
+    rows.append("td").text(function(d){return d.SYSTEM});
+    rows.append("td").text(function(d){return d.ROUTE});
+
+    rows.append("td").text(function(d){
+      var inDate = d.DATE;
+      var inTime = Array(4-String(d.TIME).length+1).join("0")+ String(d.TIME);
+      var tryDate = new Date(inDate);
+      tryDate.setHours(inTime.substring(0,2));
+      tryDate.setMinutes(inTime.substring(3))
+
+      return tryDate.toLocaleString();
+    });
+
+    rows.append("td").text(function(d){return d.CRASH_SEV});
+    rows.append("td").text(function(d){return d.KILLED});
+    rows.append("td").text(function(d){return d.SERIOUS_IN});
+    rows.append("td").text(function(d){return d.OTHER_INJ});
+
+    rows.append("td").text(function(d){return d.lat});
+    rows.append("td").text(function(d){return d.long});
+  }
+
+});
+
+function loadData(){
+  var def = Q.defer();
+  d3.csv("state-bike-data.csv", function(data) {
+    nestData = d3.nest().key(function(d){ return d.lat + "," + d.long}).entries(data);
+
+    for (var i = 0; i < nestData.length; i++) {
+      var intersectTotal = 0;
+      var seriousInjury = 0;
+      var otherInjury = 0;
+      var killed = 0;
+
+      for (var j = 0; j < nestData[i].values.length; j++) {
+        if (nestData[i].values[j].CRASH_SEV == "A"){
+          intersectTotal+=10;
+        }
+        else if (nestData[i].values[j].CRASH_SEV == "B"){
+          intersectTotal+=5;
+        }
+        else if (nestData[i].values[j].CRASH_SEV == "C"){
+          intersectTotal+=3;
+        }
+        else if (nestData[i].values[j].CRASH_SEV == "K"){
+          intersectTotal+=50;
+        }
+        else if (nestData[i].values[j].CRASH_SEV == "N"){
+          intersectTotal+=1;
+        }
+
+        seriousInjury = seriousInjury + Number(nestData[i].values[j].SERIOUS_IN);
+        otherInjury = otherInjury + Number(nestData[i].values[j].OTHER_INJ);
+        killed = killed + Number(nestData[i].values[j].KILLED);
+      }
+
+      nestData[i].intersectSeriousInjury = seriousInjury;
+      nestData[i].intersectOtherInjury = otherInjury;
+      nestData[i].intersectKilled = killed;
+      nestData[i].intersectTotal = intersectTotal;
+    }
+
+    var sortedNestData = nestData.sort(function(a,b){
+      return b.intersectTotal - a.intersectTotal;
+    });
+
+    def.resolve();
+  });
+
+  return def.promise;
+}
+    </script>
+  </body>
+</html>
